@@ -70,19 +70,23 @@ img {
 
 <div id="synopsis" class="section level1">
 <h1>Synopsis</h1>
+<p>Using data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants who lift barbells correctly and incorrectly in 5 different ways, this project aims to build a classifier that can recognize these five activity types.</p>
+<p>We pick 53 variables to build our classifiers. Among the total 160 variables in the data set, 152 variables represent data from accelerometers and 1 variable represents different activity types. Among the accelerometer-related variables, 93 variables have a relatively large variance, thus they contribute more to the classification of activity types. After removing variables that contain <code>NA</code> from the 93 variables, there are 52 variables left. The 53th variable indicates activity type.</p>
+<p>We first separate our data into training set (70%) and testing set (30%). We then build our classifiers on training data, using decision tree, random forest, boosting with trees, and support vector machine (SVM) with linear kernel. For each model, we use cross validation to select model parameters. We then select our models based on their accuracy on testing set (or out of sample error).</p>
+<p>Using a maximum out of sample error to be 0.05 as a criterion, we choose the model using random forest and the model using boosting with trees as our classifiers. The former model has a higher accuracy on testing data (or a lower out of sample error) but a higher computational time as well. Finally, we apply both of our classifiers to the 20 test cases and they give the same results.</p>
 </div>
 <div id="data-analysis" class="section level1">
 <h1>Data analysis</h1>
-<div id="load-packages-and-set-seed" class="section level3">
-<h3>Load packages and set seed</h3>
+<div id="load-packages-and-set-seed" class="section level2">
+<h2>Load packages and set seed</h2>
 <pre class="r"><code>library(caret)
 library(rpart)
 library(randomForest)
 library(kernlab)
 set.seed(1235)</code></pre>
 </div>
-<div id="load-data" class="section level3">
-<h3>Load data</h3>
+<div id="load-data" class="section level2">
+<h2>Load data</h2>
 <pre class="r"><code>FileName1 &lt;- &quot;pml-train.csv&quot;
 if (!file.exists(FileName1))
 {
@@ -96,47 +100,51 @@ if (!file.exists(FileName2))
   download.file(url = url, destfile = FileName2, method = &quot;curl&quot;)
 }
 dataTrain &lt;- read.csv(&quot;pml-train.csv&quot;)
-dataValid &lt;- read.csv(&quot;pml-test.csv&quot;)</code></pre>
+dataSubmit &lt;- read.csv(&quot;pml-test.csv&quot;)</code></pre>
 </div>
-<div id="explore-data" class="section level3">
-<h3>Explore data</h3>
-<p>The data set has 160 variables</p>
-<pre class="r"><code>dim(dataTrain); dim(dataValid)</code></pre>
+<div id="explore-data" class="section level2">
+<h2>Explore data</h2>
+<p>The data set has 160 variables.</p>
+<pre class="r"><code>dim(dataTrain); dim(dataSubmit)</code></pre>
 <pre><code>## [1] 19622   160</code></pre>
 <pre><code>## [1]  20 160</code></pre>
 <pre class="r"><code>summary(dataTrain)</code></pre>
-<p>The first several variables are not related to sensors. The last variable <code>classe</code> is the activity type.</p>
+<p>The first several variables are not related to accelerometers. The last variable <code>classe</code> is the activity type.</p>
 <pre class="r"><code>head(colnames(dataTrain)); tail(colnames(dataTrain))</code></pre>
 <pre><code>## [1] &quot;X&quot;                    &quot;user_name&quot;            &quot;raw_timestamp_part_1&quot;
 ## [4] &quot;raw_timestamp_part_2&quot; &quot;cvtd_timestamp&quot;       &quot;new_window&quot;</code></pre>
 <pre><code>## [1] &quot;accel_forearm_y&quot;  &quot;accel_forearm_z&quot;  &quot;magnet_forearm_x&quot;
 ## [4] &quot;magnet_forearm_y&quot; &quot;magnet_forearm_z&quot; &quot;classe&quot;</code></pre>
-<p>There are <span class="math">\(NA\)</span> in the data.</p>
+<p>There are some missing values in the data set.</p>
 <pre class="r"><code>table(complete.cases(dataTrain))</code></pre>
 <pre><code>## 
 ## FALSE  TRUE 
 ## 19216   406</code></pre>
 </div>
-<div id="preprocess-data" class="section level3">
-<h3>Preprocess data</h3>
+<div id="preprocess-data" class="section level2">
+<h2>Preprocess data</h2>
 <ol style="list-style-type: decimal">
-<li>Choose sensor-related variables and the activity type variable.</li>
+<li>Subset data that only include accelerometer-related variables and the activity type variable.</li>
 </ol>
 <pre class="r"><code>sensorColumns = grep(pattern = &quot;_belt|_arm|_dumbbell|_forearm&quot;, names(dataTrain))
 dataMy1 = dataTrain[, c(sensorColumns,160)]; dim(dataMy1)</code></pre>
 <pre><code>## [1] 19622   153</code></pre>
-<pre class="r"><code>dataValidMy1 = dataValid[, c(sensorColumns,160)]; dim(dataValidMy1)</code></pre>
+<pre class="r"><code>dataSubmitMy1 = dataSubmit[, c(sensorColumns,160)]; dim(dataSubmitMy1)</code></pre>
 <pre><code>## [1]  20 153</code></pre>
-<p>There are 152 sensor-related variables. 2. Remove near-zero-variance variables</p>
+<p>There are 152 accelerometer-related variables, plus one activity type variable.</p>
+<ol start="2" style="list-style-type: decimal">
+<li>Remove variables that have near-zero-variance.</li>
+</ol>
 <pre class="r"><code>nzv &lt;- nearZeroVar(dataMy1, saveMetrics=TRUE)
 dataMy &lt;- dataMy1[!nzv$nzv]; dim(dataMy)</code></pre>
 <pre><code>## [1] 19622    94</code></pre>
-<pre class="r"><code>dataValidMy &lt;- dataValidMy1[!nzv$nzv]; dim(dataValidMy)</code></pre>
+<pre class="r"><code>dataSubmitMy &lt;- dataSubmitMy1[!nzv$nzv]; dim(dataSubmitMy)</code></pre>
 <pre><code>## [1] 20 94</code></pre>
-<p>There are 93 sensor-related variables left.</p>
+<p>There are 93 accelerometer-related variables left, plus one activity type variable.</p>
 <ol start="3" style="list-style-type: decimal">
-<li>Remove NA One way is to remove all columns that contain NA.</li>
+<li>Remove <code>NA</code></li>
 </ol>
+<p>One way to deal with missing values is to remove all columns that contain <code>NA</code>.</p>
 <pre class="r"><code>missingData = is.na(dataMy)
 omitColumns = which(colSums(missingData) !=0)
 dataFinal = dataMy[, -omitColumns]; dim(dataFinal)</code></pre>
@@ -164,22 +172,22 @@ dataFinal = dataMy[, -omitColumns]; dim(dataFinal)</code></pre>
 <pre><code>## 
 ##  TRUE 
 ## 19622</code></pre>
-<p>There are no NA in the training set. Next remove the same column in the validating set.</p>
-<pre class="r"><code>dataValidFinal = dataValidMy[, -omitColumns]
-dim(dataValidFinal)</code></pre>
+<p>Now there are no missing values in the data set. Next, remove the same column in the 20 test cases for submission.</p>
+<pre class="r"><code>dataSubmitFinal = dataSubmitMy[, -omitColumns]
+dim(dataSubmitFinal)</code></pre>
 <pre><code>## [1] 20 53</code></pre>
-<pre class="r"><code>table(complete.cases(dataValidFinal))</code></pre>
+<pre class="r"><code>table(complete.cases(dataSubmitFinal))</code></pre>
 <pre><code>## 
 ## TRUE 
 ##   20</code></pre>
-<p>An alternative way is to remove all rows that contain NA.</p>
+<p>An alternative way to deal with missing values is to remove all rows that contain <code>NA</code>.</p>
 <pre class="r"><code>omitRows=which(rowSums(missingData) !=0)
 dataFinal2=dataMy[-omitRows, ]
 dim(dataFinal2)</code></pre>
 <pre><code>## [1] 406  94</code></pre>
-<p>However, there are only 406 rows left, which means the data set is too small to be applied the machine learning technique. Thus, we use the first way to remove NA.</p>
+<p>However, there are only 406 rows left, which means the data set is too small to apply the machine learning technique. Thus, we use the first way to remove <code>NA</code>.</p>
 <ol start="4" style="list-style-type: decimal">
-<li>Make sure the sensor related variables are numeric variables and the activity type variable is a factor variable.</li>
+<li>Make sure the accelerometer-related variables are numeric variables and the activity type variable is a factor variable.</li>
 </ol>
 <pre class="r"><code>class(dataFinal$classe)</code></pre>
 <pre><code>## [1] &quot;factor&quot;</code></pre>
@@ -188,12 +196,14 @@ dim(dataFinal2)</code></pre>
 ## FALSE  TRUE 
 ##     1    52</code></pre>
 <ol start="5" style="list-style-type: decimal">
-<li>Check if there are similar number of rows for each activity type. For four types of sensor, check if the number of variables that relate to each type of sensor are similar.</li>
+<li>Check if the data set is skewed to a certain activity type or accelerometer.</li>
 </ol>
+<p>First, check if there are similar number of rows for each activity type.</p>
 <pre class="r"><code>table(dataFinal$classe)</code></pre>
 <pre><code>## 
 ##    A    B    C    D    E 
 ## 5580 3797 3422 3216 3607</code></pre>
+<p>Next, for the four types of accelerometer, check if the number of variables that relate to each type of accelerometer is comparable.</p>
 <pre class="r"><code>length(grep(pattern = &quot;_belt&quot;, names(dataFinal)))</code></pre>
 <pre><code>## [1] 13</code></pre>
 <pre class="r"><code>length(grep(pattern = &quot;_arm&quot;, names(dataFinal)))</code></pre>
@@ -202,12 +212,12 @@ dim(dataFinal2)</code></pre>
 <pre><code>## [1] 13</code></pre>
 <pre class="r"><code>length(grep(pattern = &quot;_forearm&quot;, names(dataFinal)))</code></pre>
 <pre><code>## [1] 13</code></pre>
-<p>We can regard this data set as homogenous.</p>
+<p>This data set is not skewed to a particular activity type or data from a specific type of accelerometer, which is good.</p>
 </div>
-<div id="classify-activity-types" class="section level3">
-<h3>Classify activity types</h3>
+<div id="build-models-to-classify-activity-types" class="section level2">
+<h2>Build models to classify activity types</h2>
 <ol style="list-style-type: decimal">
-<li>Split the training set above into training data and testing data.</li>
+<li>Split the data set into training data and testing data.</li>
 </ol>
 <pre class="r"><code>inTrain &lt;- createDataPartition(y=dataFinal$classe, p=0.7, list=FALSE)
 training &lt;- dataFinal[inTrain,]
@@ -217,13 +227,17 @@ dim(training)</code></pre>
 <pre class="r"><code>dim(testing)</code></pre>
 <pre><code>## [1] 5885   53</code></pre>
 <ol start="2" style="list-style-type: decimal">
-<li>2 repeats of 3-Fold CV</li>
+<li>Use 3-fold cross validation (CV) with 2 repeats to select model parameters.</li>
 </ol>
 <pre class="r"><code>controlRf &lt;- trainControl(method=&quot;cv&quot;, number=3,repeats = 2)</code></pre>
-<p>3.1 decision tree</p>
+<ol start="3" style="list-style-type: decimal">
+<li>Build models using different classifiers.</li>
+</ol>
+<div id="use-decision-tree-as-the-classifier-with-centering-and-scaling-data-as-well-as-3-fold-cv." class="section level4">
+<h4>Use decision tree as the classifier, with centering and scaling data, as well as 3-fold CV.</h4>
 <pre class="r"><code>system.time(modelFitTree &lt;- train(classe ~., data=training, preProcess=c(&quot;center&quot;,&quot;scale&quot;), trControl=controlRf, method=&quot;rpart&quot;)) </code></pre>
 <pre><code>##    user  system elapsed 
-##  11.606   0.372  12.020</code></pre>
+##  11.228   0.475  11.946</code></pre>
 <pre class="r"><code>modelFitTree</code></pre>
 <pre><code>## CART 
 ## 
@@ -258,8 +272,7 @@ dim(training)</code></pre>
 ##         21) roll_forearm&gt;=0.8329456 3653 2450 C (0.079 0.18 0.33 0.23 0.19) *
 ##       11) magnet_dumbbell_y&gt;=0.6634055 1771  853 B (0.035 0.52 0.04 0.22 0.19) *
 ##    3) roll_belt&gt;=1.05583 1155    7 E (0.0061 0 0 0 0.99) *</code></pre>
-<pre class="r"><code>predictTree=predict(modelFitTree,testing)
-confusionMatrix(testing$classe, predictTree)</code></pre>
+<pre class="r"><code>predictTree=predict(modelFitTree,testing); confusionMatrix(testing$classe, predictTree)</code></pre>
 <pre><code>## Confusion Matrix and Statistics
 ## 
 ##           Reference
@@ -291,10 +304,13 @@ confusionMatrix(testing$classe, predictTree)</code></pre>
 ## Detection Rate         0.2591  0.06423  0.08904   0.0000  0.08207
 ## Detection Prevalence   0.2845  0.19354  0.17434   0.1638  0.18386
 ## Balanced Accuracy      0.7247  0.66298  0.60979       NA  0.93734</code></pre>
-<p>3.2 rf</p>
+<p>Accuracy on the testing set is 0.495, which is low. We won’t use this classifier. There is no need to plot the corresponding classification tree.</p>
+</div>
+<div id="use-random-forest-as-the-classifier-with-centering-and-scaling-data-as-well-as-3-fold-cv" class="section level4">
+<h4>Use random forest as the classifier, with centering and scaling data, as well as 3-fold CV</h4>
 <pre class="r"><code>system.time(modelFitRf &lt;- train(classe ~., data=training, preProcess=c(&quot;center&quot;,&quot;scale&quot;),  trControl=controlRf,method=&quot;rf&quot;))</code></pre>
 <pre><code>##    user  system elapsed 
-## 565.412   4.742 571.186</code></pre>
+## 593.119   6.706 608.817</code></pre>
 <pre class="r"><code>modelFitRf</code></pre>
 <pre><code>## Random Forest 
 ## 
@@ -330,8 +346,7 @@ confusionMatrix(testing$classe, predictTree)</code></pre>
 ## C    0   12 2376    8    0 0.008347245
 ## D    1    3   21 2224    3 0.012433393
 ## E    0    2    3   10 2510 0.005940594</code></pre>
-<pre class="r"><code>predictRf=predict(modelFitRf,testing)
-confusionMatrix(testing$classe, predictRf)</code></pre>
+<pre class="r"><code>predictRf=predict(modelFitRf,testing); confusionMatrix(testing$classe, predictRf)</code></pre>
 <pre><code>## Confusion Matrix and Statistics
 ## 
 ##           Reference
@@ -363,10 +378,13 @@ confusionMatrix(testing$classe, predictRf)</code></pre>
 ## Detection Rate         0.2843   0.1918   0.1728   0.1619   0.1835
 ## Detection Prevalence   0.2845   0.1935   0.1743   0.1638   0.1839
 ## Balanced Accuracy      0.9978   0.9967   0.9918   0.9963   0.9993</code></pre>
-<p>3.3 Boosting with trees</p>
+<p>Accuracy on the testing set is 0.994, which is high. The computational time is relatively long.</p>
+</div>
+<div id="using-boosting-with-trees-as-the-classifier-with-centering-and-scaling-data-as-well-as-3-fold-cv" class="section level4">
+<h4>Using boosting with trees as the classifier, with centering and scaling data, as well as 3-fold CV</h4>
 <pre class="r"><code>system.time(modelFitSgb &lt;- train(classe ~., data=training, preProcess=c(&quot;center&quot;,&quot;scale&quot;),  trControl=controlRf,method=&quot;gbm&quot;,verbose=FALSE)) </code></pre>
 <pre><code>##    user  system elapsed 
-## 201.695   2.604 206.125</code></pre>
+## 201.796   2.467 204.657</code></pre>
 <pre class="r"><code>modelFitSgb</code></pre>
 <pre><code>## Stochastic Gradient Boosting 
 ## 
@@ -410,8 +428,7 @@ confusionMatrix(testing$classe, predictRf)</code></pre>
 <pre><code>## A gradient boosted model with multinomial loss function.
 ## 150 iterations were performed.
 ## There were 52 predictors of which 44 had non-zero influence.</code></pre>
-<pre class="r"><code>predictSgb=predict(modelFitSgb,testing)
-confusionMatrix(testing$classe, predictSgb)</code></pre>
+<pre class="r"><code>predictSgb=predict(modelFitSgb,testing); confusionMatrix(testing$classe, predictSgb)</code></pre>
 <pre><code>## Confusion Matrix and Statistics
 ## 
 ##           Reference
@@ -443,10 +460,13 @@ confusionMatrix(testing$classe, predictSgb)</code></pre>
 ## Detection Rate         0.2811   0.1803   0.1667   0.1568   0.1789
 ## Detection Prevalence   0.2845   0.1935   0.1743   0.1638   0.1839
 ## Balanced Accuracy      0.9844   0.9668   0.9568   0.9847   0.9928</code></pre>
-<p>3.4 SVM with linear kernel</p>
+<p>Accuracy on the testing set is 0.964, which is high. The computational time is only 40% of that for the model using random forest.</p>
+</div>
+<div id="using-svm-with-linear-kernel-as-the-classifier-with-centering-and-scaling-data-as-well-as-3-fold-cv" class="section level4">
+<h4>Using SVM with linear kernel as the classifier, with centering and scaling data, as well as 3-fold CV</h4>
 <pre class="r"><code>system.time(modelFitSvm &lt;- train(classe ~., data=training, preProcess=c(&quot;center&quot;,&quot;scale&quot;),  trControl=controlRf,method=&quot;svmLinear&quot;)) </code></pre>
 <pre><code>##    user  system elapsed 
-##  70.784   1.090  72.454</code></pre>
+##  72.116   1.095  73.378</code></pre>
 <pre class="r"><code>modelFitSvm</code></pre>
 <pre><code>## Support Vector Machines with Linear Kernel 
 ## 
@@ -476,8 +496,7 @@ confusionMatrix(testing$classe, predictSgb)</code></pre>
 ## 
 ## Objective Function Value : -1440.722 -1236.729 -1044.898 -668.2681 -1361.484 -856.3825 -1677.471 -1187.563 -1067.047 -1183.864 
 ## Training error : 0.206523</code></pre>
-<pre class="r"><code>predictSvm=predict(modelFitSvm,testing)
-confusionMatrix(testing$classe, predictSvm)</code></pre>
+<pre class="r"><code>predictSvm=predict(modelFitSvm,testing); confusionMatrix(testing$classe, predictSvm)</code></pre>
 <pre><code>## Confusion Matrix and Statistics
 ## 
 ##           Reference
@@ -509,43 +528,42 @@ confusionMatrix(testing$classe, predictSvm)</code></pre>
 ## Detection Rate         0.2612   0.1398   0.1397   0.1186   0.1290
 ## Detection Prevalence   0.2845   0.1935   0.1743   0.1638   0.1839
 ## Balanced Accuracy      0.8910   0.8370   0.8426   0.8856   0.8827</code></pre>
-<p>Using PCA</p>
+<p>Accuracy on the testing set is 0.788, which is low. We won’t use this classifier.</p>
+<ol start="4" style="list-style-type: decimal">
+<li>Model selection</li>
+</ol>
+<p>I except the out of sample error to be smaller than 0.05, which corresponding to the accuracy on the testing set larger than 0.95. Thus both the model using random forest classifier and the model using boosting with trees work well. The former model has a lower out of sample error but a higher computational time. We apply both models to the 20 test cases for submission and they give the same results.</p>
 </div>
-<div id="optimization" class="section level3">
-<h3>Optimization</h3>
+</div>
+<div id="optimize-computational-time" class="section level2">
+<h2>Optimize computational time</h2>
 <ul>
-<li>parallel</li>
-<li>pca</li>
-<li>cache</li>
+<li>I use <code>cache = TRUE</code> so that I only need to train my models once.</li>
+<li>I tried to compute in parallel using the multiple cores of my laptop, but it didn’t work with some methods I used to train my models.</li>
+<li>I used principal component analysis (PCA) to reduce dimensions of data, which reduced the computational time. As excepted, the PCA preprocessing also reduced the accuracy of the predictions on testing set. Given the computational time in this project is not that large, there is no good reason to use PCA. Thus, I only use <code>cache = TRUE</code> in this project to optimize computational time.</li>
 </ul>
 </div>
-<div id="files-to-submit" class="section level3">
-<h3>Files to submit</h3>
-<pre class="r"><code>predictValid=predict(modelFitRf,dataValidFinal)
-pml_write_files = function(x){
-  n = length(x)
-  for(i in 1:n){
-    filename = paste0(&quot;problem_id_&quot;,i,&quot;.txt&quot;)
-    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
-  }
-}
-pml_write_files(predictValid)
-
-predictValid2=predict(modelFitSgb,dataValidFinal)
-pml_write_files2 = function(x){
-  n = length(x)
-  for(i in 1:n){
-    filename = paste0(&quot;problem_id2_&quot;,i,&quot;.txt&quot;)
-    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
-  }
-}
-pml_write_files2(predictValid2)</code></pre>
 </div>
-</div>
-<div id="summary" class="section level1">
-<h1>Summary</h1>
+<div id="discussions" class="section level1">
+<h1>Discussions</h1>
+<ul>
+<li><p>For the model using decision tree, the low accuracy on the testing data is not surprsing, since the method often leads to overfitting. However, the low accuracy on the training data suprises me.</p></li>
+<li><p>I use Kernel SVM here since it is very population in classification. However, this method gives a low accuracy (0.788) on the testing data. I have to think more to understand why Kernel SVM doesn’t work well in this case.</p></li>
+</ul>
 <div id="reference" class="section level3">
 <h3>Reference</h3>
+<ol style="list-style-type: decimal">
+<li>Qualitative Activity Recognition of Weight Lifting Exercises</li>
+</ol>
+<p><a href="http://groupware.les.inf.puc-rio.br/public/papers/2013.Velloso.QAR-WLE.pdf" class="uri">http://groupware.les.inf.puc-rio.br/public/papers/2013.Velloso.QAR-WLE.pdf</a></p>
+<ol start="2" style="list-style-type: decimal">
+<li>Wearable Computing: Accelerometers’ Data Classification of Body Postures and Movements</li>
+</ol>
+<p><a href="http://groupware.les.inf.puc-rio.br/public/papers/2012.Ugulino.WearableComputing.HAR.Classifier.RIBBON.pdf" class="uri">http://groupware.les.inf.puc-rio.br/public/papers/2012.Ugulino.WearableComputing.HAR.Classifier.RIBBON.pdf</a></p>
+<ol start="3" style="list-style-type: decimal">
+<li>Website of the data</li>
+</ol>
+<p><a href="http://groupware.les.inf.puc-rio.br/har" class="uri">http://groupware.les.inf.puc-rio.br/har</a></p>
 </div>
 </div>
 
