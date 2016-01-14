@@ -1,0 +1,261 @@
+---
+title: "Human Activity Recognition"
+author: "Yuqian Liu"
+date: "November 21, 2015"
+output: html_document
+---
+
+# Synopsis
+Using data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants who lift barbells correctly and incorrectly in 5 different ways, this project aims to build a classifier that can recognize these five activity types.
+
+We pick 53 variables to build our classifiers. Among the total 160 variables in the data set, 152 variables represent data from accelerometers and 1 variable represents different activity types. Among the accelerometer-related variables, 93 variables have a relatively large variance, thus they contribute more to the classification of activity types. After removing variables that contain `NA` from the 93 variables, there are 52 variables left. The 53th variable indicates activity type.   
+
+We first separate our data into training set (70%) and testing set (30%). We then build our classifiers on training data, using decision tree, random forest, boosting with trees, and support vector machine (SVM) with linear kernel. For each model, we use cross validation to select model parameters. We then select our models based on their accuracy on testing set (or out of sample error). 
+
+Using a maximum out of sample error to be 0.05 as a criterion, we choose the model using random forest and the model using boosting with trees as our classifiers. The former model has a higher accuracy on testing data (or a lower out of sample error) but a higher computational time as well. Finally, we apply both of our classifiers to the 20 test cases and they give the same results.
+
+# Data analysis
+
+## Load packages and set seed
+```{r message=FALSE, warning=FALSE}
+library(caret)
+library(rpart)
+library(randomForest)
+library(kernlab)
+set.seed(1235)
+```
+
+## Load data
+```{r cache = TRUE}
+FileName1 <- "pml-train.csv"
+if (!file.exists(FileName1))
+{
+  url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+  download.file(url = url, destfile = FileName1, method = "curl")
+}
+FileName2 <- "pml-test.csv"
+if (!file.exists(FileName2))
+{
+  url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+  download.file(url = url, destfile = FileName2, method = "curl")
+}
+dataTrain <- read.csv("pml-train.csv")
+dataSubmit <- read.csv("pml-test.csv")
+```
+
+## Explore data
+The data set has 160 variables.
+```{r cache = TRUE}
+dim(dataTrain); dim(dataSubmit)
+```
+
+```{r cache = TRUE, eval=FALSE}
+summary(dataTrain)
+```
+The first several variables are not related to accelerometers. The last variable `classe` is the activity type.
+```{r cache = TRUE}
+head(colnames(dataTrain)); tail(colnames(dataTrain))
+```
+There are some missing values in the data set.
+```{r cache = TRUE}
+table(complete.cases(dataTrain))
+```
+
+## Preprocess data
+1. Subset data that only include accelerometer-related variables and the activity type variable.
+```{r cache = TRUE}
+sensorColumns = grep(pattern = "_belt|_arm|_dumbbell|_forearm", names(dataTrain))
+dataMy1 = dataTrain[, c(sensorColumns,160)]; dim(dataMy1)
+dataSubmitMy1 = dataSubmit[, c(sensorColumns,160)]; dim(dataSubmitMy1)
+```
+There are 152 accelerometer-related variables, plus one activity type variable.
+
+2. Remove variables that have near-zero-variance.
+```{r cache = TRUE}
+nzv <- nearZeroVar(dataMy1, saveMetrics=TRUE)
+dataMy <- dataMy1[!nzv$nzv]; dim(dataMy)
+dataSubmitMy <- dataSubmitMy1[!nzv$nzv]; dim(dataSubmitMy)
+```
+There are 93 accelerometer-related variables left, plus one activity type variable.
+
+3. Remove `NA`
+
+One way to deal with missing values is to remove all columns that contain `NA`.
+```{r cache = TRUE}
+missingData = is.na(dataMy)
+omitColumns = which(colSums(missingData) !=0)
+dataFinal = dataMy[, -omitColumns]; dim(dataFinal)
+colnames(dataFinal)
+table(complete.cases(dataFinal))
+```
+Now there are no missing values in the data set. Next, remove the same column in the 20 test cases for submission.
+```{r cache = TRUE}
+dataSubmitFinal = dataSubmitMy[, -omitColumns]
+dim(dataSubmitFinal)
+table(complete.cases(dataSubmitFinal))
+```
+
+An alternative way to deal with missing values is to remove all rows that contain `NA`.
+```{r cache = TRUE}
+omitRows=which(rowSums(missingData) !=0)
+dataFinal2=dataMy[-omitRows, ]
+dim(dataFinal2)
+```
+However, there are only 406 rows left, which means the data set is too small to apply the machine learning technique. Thus, we use the first way to remove `NA`.
+
+4. Make sure the accelerometer-related variables are numeric variables and the activity type variable is a factor variable.
+```{r cache = TRUE}
+class(dataFinal$classe)
+table(sapply(dataFinal, is.numeric))
+```
+
+5. Check if the data set is skewed to a certain activity type or accelerometer.
+
+First, check if there are similar number of rows for each activity type. 
+```{r cache = TRUE}
+table(dataFinal$classe)
+```
+Next, for the four types of accelerometer, check if the number of variables that relate to each type of accelerometer is comparable.
+```{r cache = TRUE}
+length(grep(pattern = "_belt", names(dataFinal)))
+length(grep(pattern = "_arm", names(dataFinal)))
+length(grep(pattern = "_dumbbell", names(dataFinal)))
+length(grep(pattern = "_forearm", names(dataFinal)))
+```
+This data set is not skewed to a particular activity type or data from a specific type of accelerometer, which is good. 
+
+## Build models to classify activity types
+1. Split the data set into training data and testing data. 
+```{r cache = TRUE}
+inTrain <- createDataPartition(y=dataFinal$classe, p=0.7, list=FALSE)
+training <- dataFinal[inTrain,]
+testing <- dataFinal[-inTrain,]
+dim(training)
+dim(testing)
+```
+2. Use 3-fold cross validation (CV) with 2 repeats to select model parameters.
+
+```{r cache = TRUE}
+controlRf <- trainControl(method="cv", number=3,repeats = 2)
+```
+
+3. Build models using different classifiers.
+
+#### Use decision tree as the classifier, with centering and scaling data, as well as 3-fold CV.
+```{r cache = TRUE}
+system.time(modelFitTree <- train(classe ~., data=training, preProcess=c("center","scale"), trControl=controlRf, method="rpart")) 
+modelFitTree
+modelFitTree$finalModel
+predictTree=predict(modelFitTree,testing); confusionMatrix(testing$classe, predictTree)
+```
+Accuracy on the testing set is 0.495, which is low. We won't use this classifier. There is no need to plot the corresponding classification tree.
+
+#### Use random forest as the classifier, with centering and scaling data, as well as 3-fold CV
+```{r cache = TRUE}
+system.time(modelFitRf <- train(classe ~., data=training, preProcess=c("center","scale"),  trControl=controlRf,method="rf"))
+modelFitRf
+modelFitRf$finalModel
+predictRf=predict(modelFitRf,testing); confusionMatrix(testing$classe, predictRf)
+```
+Accuracy on the testing set is 0.994, which is high. The computational time is relatively long.
+
+#### Using boosting with trees as the classifier, with centering and scaling data, as well as 3-fold CV
+```{r cache = TRUE}
+system.time(modelFitSgb <- train(classe ~., data=training, preProcess=c("center","scale"),  trControl=controlRf,method="gbm",verbose=FALSE)) 
+modelFitSgb
+modelFitSgb$finalModel
+predictSgb=predict(modelFitSgb,testing); confusionMatrix(testing$classe, predictSgb)
+```
+Accuracy on the testing set is 0.964, which is high. The computational time is only 40% of that for the model using random forest.
+
+#### Using SVM with linear kernel as the classifier, with centering and scaling data, as well as 3-fold CV
+
+```{r cache = TRUE}
+system.time(modelFitSvm <- train(classe ~., data=training, preProcess=c("center","scale"),  trControl=controlRf,method="svmLinear")) 
+modelFitSvm
+modelFitSvm$finalModel
+predictSvm=predict(modelFitSvm,testing); confusionMatrix(testing$classe, predictSvm)
+```
+Accuracy on the testing set is 0.788, which is low. We won't use this classifier.
+
+4. Model selection
+
+I except the out of sample error to be smaller than 0.05, which corresponding to the accuracy on the testing set larger than 0.95. Thus both the model using random forest classifier and the model using boosting with trees work well. The former model has a lower out of sample error but a higher computational time. We apply both models to the 20 test cases for submission and they give the same results.
+
+## Optimize computational time
+- I use `cache = TRUE` so that I only need to train my models once. 
+- I tried to compute in parallel using the multiple cores of my laptop, but it didn't work with some methods I used to train my models. 
+- I used principal component analysis (PCA) to reduce dimensions of data, which reduced the computational time. As excepted, the PCA preprocessing also reduced the accuracy of the predictions on testing set. Given the computational time in this project is not that large, there is no good reason to use PCA. Thus, I only use `cache = TRUE` in this project to optimize computational time.  
+
+```{r cache = TRUE, eval=FALSE,  echo=FALSE}
+system.time(modelFitRf2 <- train(classe ~., data=training, preProcess="pca",  trControl=controlRf,method="rf")) 
+modelFitRf2$finalModel
+modelFitRf2
+predictRf2=predict(modelFitRf2,testing)
+confusionMatrix(testing$classe, predictRf2)
+
+system.time(modelFitTree2 <- train(classe ~., data=training, preProcess="pca",  trControl=controlRf,method="rpart")) 
+modelFitTree2$finalModel
+modelFitTree2
+predictTree2=predict(modelFitTree2,testing)
+confusionMatrix(testing$classe, predictTree2)
+
+system.time(modelFitSgb2 <- train(classe ~., data=training, preProcess="pca",  trControl=controlRf,method="gbm",verbose=FALSE)) 
+modelFitSgb2$finalModel
+modelFitSgb2
+predictSgb2=predict(modelFitSgb2,testing)
+confusionMatrix(testing$classe, predictSgb2)
+
+system.time(modelFitSvm2 <- train(classe ~., data=training, preProcess="pca",  trControl=controlRf,method="svmLinear")) 
+modelFitSvm2$finalModel
+modelFitSvm2
+predictSvm2=predict(modelFitSvm2,testing)
+confusionMatrix(testing$classe, predictSvm2)
+```
+
+```{r echo=FALSE,eval=FALSE}
+# Files to submit
+# model 1
+predictSubmit=predict(modelFitRf,dataSubmitFinal)
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files(predictSubmit)
+# model 2
+predictSubmit2=predict(modelFitSgb,dataSubmitFinal)
+pml_write_files2 = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id2_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files2(predictSubmit2)
+
+```
+
+# Discussions
+
+- For the model using decision tree, the low accuracy on the testing data is not surprsing, since the method often leads to overfitting. However, the low accuracy on the training data suprises me. 
+
+- I use Kernel SVM here since it is very population in classification. However, this method gives a low accuracy (0.788) on the testing data. I have to think more to understand why Kernel SVM doesn't work well in this case. 
+
+
+### Reference
+
+1. Qualitative Activity Recognition of Weight Lifting Exercises
+
+http://groupware.les.inf.puc-rio.br/public/papers/2013.Velloso.QAR-WLE.pdf
+
+2. Wearable Computing: Accelerometers’ Data Classification of Body Postures and Movements 
+
+http://groupware.les.inf.puc-rio.br/public/papers/2012.Ugulino.WearableComputing.HAR.Classifier.RIBBON.pdf
+
+3. Website of the data
+
+http://groupware.les.inf.puc-rio.br/har
+
