@@ -1,5 +1,16 @@
 # human-activity-recognition
 a course project for practical machine learning in Coursra
 
-To view the HTML file:
+### Background (copy from the project website)
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+### Data
+ pml-test.csv, pml-train.csv
+ 
+ 
+### Results
+
+- To see the final report: HAR.html, which is compiled from HAR.Rmd (contains more details)  
+- To view the HTML file:
 http://yoyo1989.github.io/human-activity-recognition/HAR.html#/
+- To see the predictions of 20 test cases (pml-test.csv) using two machine learning methods learned from pml-train.csv data: problem_id_*.txt and problem_id2_*.txt
